@@ -1,0 +1,79 @@
+---
+# Global variables for all hosts
+ansible_python_interpreter: /usr/bin/python3
+ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+# Security hardening settings
+security_hardening:
+  disable_root_login: true
+  disable_password_auth: true
+  enable_firewall: true
+  install_fail2ban: true
+  update_packages: true
+  enable_audit: true
+  configure_logging: true
+
+# System settings
+timezone: UTC
+ntp_servers:
+  - 0.amazon.pool.ntp.org
+  - 1.amazon.pool.ntp.org
+  - 2.amazon.pool.ntp.org
+  - 3.amazon.pool.ntp.org
+
+# AWS settings
+aws_region: eu-west-2
+aws_cli_version: "2.15.0"
+
+# Monitoring and logging
+monitoring:
+  install_cloudwatch_agent: true
+  install_node_exporter: true
+  install_filebeat: true
+  log_retention_days: 30
+
+# Docker configuration
+docker:
+  install: true
+  version: "24.0.7"
+  compose_version: "2.23.0"
+  users:
+    - ec2-user
+
+# Security tools
+security_tools:
+  install_clamav: true
+  install_rkhunter: true
+  install_lynis: true
+  install_aide: true
+
+# Backup configuration
+backup:
+  enable: true
+  s3_bucket: "{{ project_name }}-backups-{{ aws_region }}"
+  retention_days: 30
+  schedule: "0 2 * * *"  # Daily at 2 AM
+
+# SSL/TLS configuration
+ssl:
+  protocols:
+    - TLSv1.2
+    - TLSv1.3
+  ciphers: "ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!MD5:!DSS"
+  dhparam_size: 2048
+
+# File permissions
+file_permissions:
+  sensitive_files:
+    - path: /etc/ssh/sshd_config
+      owner: root
+      group: root
+      mode: '0600'
+    - path: /etc/passwd
+      owner: root
+      group: root
+      mode: '0644'
+    - path: /etc/shadow
+      owner: root
+      group: shadow
+      mode: '0640'

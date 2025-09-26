@@ -1,0 +1,121 @@
+---
+# Main deployment playbook for AWS Security Automation
+- name: Deploy AWS Security Automation Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+  tasks:
+    - name: Run Terraform to provision infrastructure
+      community.general.terraform:
+        project_path: "{{ playbook_dir }}/../terraform"
+        state: present
+        variables:
+          environment: "{{ environment | default('dev') }}"
+          aws_region: "{{ aws_region | default('eu-west-2') }}"
+        workspace: "{{ environment | default('dev') }}"
+      register: terraform_output
+      tags: [terraform, infrastructure]
+
+    - name: Display Terraform outputs
+      debug:
+        var: terraform_output.outputs
+      tags: [terraform]
+
+    - name: Wait for EC2 instances to be available
+      pause:
+        minutes: 2
+      when: terraform_output.changed
+      tags: [infrastructure]
+
+- name: Configure Security Automation Servers
+  hosts: tag_Role_security_automation
+  become: yes
+  gather_facts: yes
+  serial: 1
+
+  pre_tasks:
+    - name: Wait for system to become reachable
+      wait_for_connection:
+        timeout: 300
+
+    - name: Gather facts for first time
+      setup:
+
+  roles:
+    - role: common
+      tags: [common, base]
+    - role: geerlingguy.security
+      tags: [security, hardening]
+    - role: monitoring
+      tags: [monitoring, observability]
+    - role: geerlingguy.docker
+      tags: [docker, containers]
+    - role: aws-security-automation
+      tags: [application, security-automation]
+
+  post_tasks:
+    - name: Verify services are running
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:8000/health"
+        method: GET
+        timeout: 10
+      register: health_check
+      retries: 5
+      delay: 30
+      until: health_check.status == 200
+      tags: [verification]
+
+    - name: Run security hardening verification
+      include_tasks: tasks/verify-hardening.yml
+      tags: [verification, security]
+
+- name: Configure Monitoring Servers
+  hosts: tag_Role_monitoring
+  become: yes
+  gather_facts: yes
+
+  roles:
+    - role: common
+      tags: [common, base]
+    - role: geerlingguy.security
+      tags: [security]
+    - role: monitoring
+      tags: [monitoring]
+
+- name: Deploy Application Updates
+  hosts: tag_Role_security_automation
+  become: yes
+  serial: 1
+
+  tasks:
+    - name: Pull latest application code
+      git:
+        repo: "{{ git_repo_url | default('https://github.com/your-org/aws-security-automation.git') }}"
+        dest: /opt/security-automation
+        version: "{{ git_branch | default('main') }}"
+        force: yes
+      become_user: security
+      when: deploy_from_git | default(false)
+      notify: restart security-automation
+      tags: [deployment, update]
+
+    - name: Restart services if configuration changed
+      systemd:
+        name: "security-{{ item }}"
+        state: restarted
+      loop:
+        - automation
+        - guardduty
+        - securityhub
+        - compliance
+      when: config_changed | default(false)
+      tags: [restart]
+
+  handlers:
+    - name: restart security-automation
+      systemd:
+        name: security-automation
+        state: restarted

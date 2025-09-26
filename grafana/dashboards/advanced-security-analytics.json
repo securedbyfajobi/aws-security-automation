@@ -1,0 +1,576 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Advanced Security Analytics",
+    "description": "Advanced security dashboard with statistical insights and anomaly detection",
+    "tags": ["aws", "security", "analytics", "anomaly-detection", "correlation"],
+    "timezone": "browser",
+    "schemaVersion": 30,
+    "version": 2,
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Security Risk Score",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "(sum(security_alerts_total{severity=\"CRITICAL\"}) * 10 + sum(security_alerts_total{severity=\"HIGH\"}) * 5 + sum(security_alerts_total{severity=\"MEDIUM\"}) * 2 + sum(security_alerts_total{severity=\"LOW\"}) * 1) / 100",
+            "legendFormat": "Risk Score",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 30},
+                {"color": "orange", "value": 60},
+                {"color": "red", "value": 80}
+              ]
+            },
+            "unit": "short",
+            "min": 0,
+            "max": 100
+          }
+        },
+        "options": {
+          "showThresholdLabels": true,
+          "showThresholdMarkers": true
+        }
+      },
+      {
+        "id": 2,
+        "title": "Anomaly Detection Score",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0},
+        "targets": [
+          {
+            "expr": "avg(security_anomaly_score)",
+            "legendFormat": "Anomaly Score",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 0.3},
+                {"color": "green", "value": 0.7}
+              ]
+            },
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "False Positive Rate",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "avg(security_false_positive_rate)",
+            "legendFormat": "FP Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.2},
+                {"color": "red", "value": 0.5}
+              ]
+            },
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Alert Correlation Map",
+        "type": "nodeGraph",
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+        "targets": [
+          {
+            "expr": "security_alert_correlations",
+            "legendFormat": "{{source}} -> {{target}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "continuous-GrYlRd"}
+          }
+        },
+        "options": {
+          "nodes": {
+            "mainStatUnit": "short"
+          },
+          "edges": {
+            "mainStatUnit": "short"
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Security Metrics Time Series with Anomalies",
+        "type": "timeseries",
+        "gridPos": {"h": 10, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(guardduty_findings_total[5m])",
+            "legendFormat": "GuardDuty Findings Rate",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(security_hub_findings_total[5m])",
+            "legendFormat": "Security Hub Findings Rate",
+            "refId": "B"
+          },
+          {
+            "expr": "security_anomaly_threshold",
+            "legendFormat": "Anomaly Threshold",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "reqps",
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "gradientMode": "opacity",
+              "spanNulls": false,
+              "insertNulls": false,
+              "showPoints": "auto",
+              "pointSize": 5,
+              "stacking": {"mode": "none", "group": "A"},
+              "axisPlacement": "auto",
+              "axisLabel": "Rate",
+              "scaleDistribution": {"type": "linear"},
+              "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+              "thresholdsStyle": {"mode": "line"}
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "transparent", "value": null},
+                {"color": "red", "value": 0.5}
+              ]
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Anomaly Threshold"},
+              "properties": [
+                {"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}},
+                {"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [10, 10]}}
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 6,
+        "title": "Analytics Model Performance Metrics",
+        "type": "timeseries",
+        "gridPos": {"h": 10, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "security_analytics_accuracy",
+            "legendFormat": "Detection Accuracy",
+            "refId": "A"
+          },
+          {
+            "expr": "security_analytics_precision",
+            "legendFormat": "Detection Precision",
+            "refId": "B"
+          },
+          {
+            "expr": "security_analytics_recall",
+            "legendFormat": "Detection Recall",
+            "refId": "C"
+          },
+          {
+            "expr": "security_analytics_f1_score",
+            "legendFormat": "F1 Score",
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1,
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "lineWidth": 2,
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "spanNulls": false,
+              "insertNulls": false,
+              "showPoints": "auto",
+              "pointSize": 5,
+              "stacking": {"mode": "none", "group": "A"},
+              "axisPlacement": "auto",
+              "axisLabel": "Score",
+              "scaleDistribution": {"type": "linear"},
+              "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+              "thresholdsStyle": {"mode": "off"}
+            }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Top Anomalous Resources",
+        "type": "table",
+        "gridPos": {"h": 10, "w": 8, "x": 0, "y": 18},
+        "targets": [
+          {
+            "expr": "topk(10, security_resource_anomaly_score)",
+            "legendFormat": "{{resource_type}}: {{resource_id}}",
+            "refId": "A",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.3},
+                {"color": "red", "value": 0.7}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "options": {
+          "showHeader": true,
+          "sortBy": [{"desc": true, "displayName": "Anomaly Score"}]
+        },
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true, "__name__": true},
+              "renameByName": {
+                "resource_type": "Resource Type",
+                "resource_id": "Resource ID",
+                "Value": "Anomaly Score"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Security Event Correlation Matrix",
+        "type": "heatmap",
+        "gridPos": {"h": 10, "w": 8, "x": 8, "y": 18},
+        "targets": [
+          {
+            "expr": "security_event_correlation_matrix",
+            "legendFormat": "{{source}} -> {{target}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "continuous-RdYlBu",
+              "scheme": "RdYlBu",
+              "steps": [
+                {"color": "blue", "value": null},
+                {"color": "green", "value": 0.5},
+                {"color": "yellow", "value": 0.7},
+                {"color": "red", "value": 0.9}
+              ]
+            },
+            "unit": "percentunit"
+          }
+        },
+        "options": {
+          "calculate": true,
+          "yAxis": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Threat Intelligence Feed Status",
+        "type": "table",
+        "gridPos": {"h": 10, "w": 8, "x": 16, "y": 18},
+        "targets": [
+          {
+            "expr": "threat_intel_feed_status",
+            "legendFormat": "{{feed_name}}",
+            "refId": "A",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "green", "value": 1}
+              ]
+            },
+            "unit": "short",
+            "mappings": [
+              {
+                "options": {
+                  "0": {"text": "Offline"},
+                  "1": {"text": "Online"}
+                },
+                "type": "value"
+              }
+            ]
+          }
+        },
+        "options": {
+          "showHeader": true
+        },
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true, "__name__": true},
+              "renameByName": {
+                "feed_name": "Threat Intel Feed",
+                "Value": "Status"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Security Automation Workflow Health",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+        "targets": [
+          {
+            "expr": "rate(security_workflow_success_total[5m])",
+            "legendFormat": "Successful Workflows",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(security_workflow_failure_total[5m])",
+            "legendFormat": "Failed Workflows",
+            "refId": "B"
+          },
+          {
+            "expr": "avg(security_workflow_duration_seconds)",
+            "legendFormat": "Average Duration",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "reqps",
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "spanNulls": false,
+              "insertNulls": false,
+              "showPoints": "auto",
+              "pointSize": 5,
+              "stacking": {"mode": "none", "group": "A"},
+              "axisPlacement": "auto",
+              "axisLabel": "",
+              "scaleDistribution": {"type": "linear"},
+              "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+              "thresholdsStyle": {"mode": "off"}
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Average Duration"},
+              "properties": [
+                {"id": "unit", "value": "s"},
+                {"id": "custom.axisPlacement", "value": "right"}
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 11,
+        "title": "Predictive Security Trends",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+        "targets": [
+          {
+            "expr": "security_trend_prediction_next_hour",
+            "legendFormat": "Predicted Alerts (1h)",
+            "refId": "A"
+          },
+          {
+            "expr": "security_trend_prediction_next_day",
+            "legendFormat": "Predicted Alerts (24h)",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(security_alerts_total[1h])",
+            "legendFormat": "Actual Alerts",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short",
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "lineWidth": 2,
+              "fillOpacity": 20,
+              "gradientMode": "opacity",
+              "spanNulls": false,
+              "insertNulls": false,
+              "showPoints": "auto",
+              "pointSize": 5,
+              "stacking": {"mode": "none", "group": "A"},
+              "axisPlacement": "auto",
+              "axisLabel": "Alert Count",
+              "scaleDistribution": {"type": "linear"},
+              "hideFrom": {"legend": false, "tooltip": false, "vis": false},
+              "thresholdsStyle": {"mode": "off"}
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byRegexp", "options": "/Predicted.*/"},
+              "properties": [
+                {"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [10, 10]}}
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "region",
+          "type": "query",
+          "query": "label_values(security_alerts_total, region)",
+          "current": {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 2,
+          "includeAll": true,
+          "multi": true,
+          "allValue": ".*"
+        },
+        {
+          "name": "severity",
+          "type": "query",
+          "query": "label_values(security_alerts_total, severity)",
+          "current": {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 2,
+          "includeAll": true,
+          "multi": true,
+          "allValue": ".*"
+        },
+        {
+          "name": "source",
+          "type": "query",
+          "query": "label_values(security_alerts_total, source)",
+          "current": {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          "options": [],
+          "refresh": 2,
+          "includeAll": true,
+          "multi": true,
+          "allValue": ".*"
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Security Incidents",
+          "datasource": "prometheus",
+          "enable": true,
+          "expr": "changes(security_incident_declared[1m])",
+          "iconColor": "red",
+          "titleFormat": "Security Incident",
+          "textFormat": "{{incident_type}} incident declared",
+          "tags": ["incident"]
+        },
+        {
+          "name": "Model Updates",
+          "datasource": "prometheus",
+          "enable": true,
+          "expr": "changes(security_analytics_updated[1m])",
+          "iconColor": "blue",
+          "titleFormat": "Analytics Model Update",
+          "textFormat": "Security analytics model updated",
+          "tags": ["analytics", "update"]
+        }
+      ]
+    },
+    "links": [
+      {
+        "title": "AWS Security Console",
+        "url": "https://console.aws.amazon.com/securityhub/home#/",
+        "type": "link",
+        "targetBlank": true
+      },
+      {
+        "title": "Security Automation Logs",
+        "url": "https://console.aws.amazon.com/cloudwatch/home#logsV2:log-groups",
+        "type": "link",
+        "targetBlank": true
+      }
+    ]
+  }
+}

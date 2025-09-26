@@ -1,0 +1,36 @@
+[Unit]
+Description=AWS Security Automation Main Service
+After=network.target
+
+[Service]
+Type=simple
+User=security
+Group=security
+WorkingDirectory=/opt/security-automation
+Environment=AWS_REGION={{ aws_region | default('eu-west-2') }}
+Environment=ENVIRONMENT={{ environment | default('production') }}
+Environment=CONFIG_PATH=/etc/security-automation/config.yaml
+ExecStart=/usr/bin/python3 -m src.main
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=security-automation
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/log/security-automation /tmp
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

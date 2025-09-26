@@ -1,0 +1,193 @@
+# Prometheus alerting rules for security automation
+
+groups:
+  - name: security.alerts
+    rules:
+      # High severity findings alert
+      - alert: HighSeverityFinding
+        expr: increase(guardduty_findings_total{severity="HIGH"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: guardduty
+        annotations:
+          summary: "High severity GuardDuty finding detected"
+          description: "{{ $value }} high severity findings detected in the last 5 minutes"
+
+      # Critical severity findings alert
+      - alert: CriticalSeverityFinding
+        expr: increase(guardduty_findings_total{severity="CRITICAL"}[1m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: guardduty
+        annotations:
+          summary: "Critical severity GuardDuty finding detected"
+          description: "{{ $value }} critical findings detected - immediate attention required"
+
+      # Security Hub compliance failure
+      - alert: ComplianceFailure
+        expr: increase(securityhub_compliance_failed_total[10m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+          service: securityhub
+        annotations:
+          summary: "Multiple compliance failures detected"
+          description: "{{ $value }} compliance checks failed in the last 10 minutes"
+
+      # IAM policy violations
+      - alert: IAMPolicyViolation
+        expr: increase(iam_policy_violations_total[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: iam-analyzer
+        annotations:
+          summary: "IAM policy violations detected"
+          description: "{{ $value }} IAM policy violations found"
+
+      # Excessive permissions detected
+      - alert: ExcessivePermissions
+        expr: iam_excessive_permissions_count > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: iam-analyzer
+        annotations:
+          summary: "Excessive IAM permissions detected"
+          description: "{{ $value }} users/roles have excessive permissions"
+
+      # Cost threshold exceeded
+      - alert: SecurityCostThresholdExceeded
+        expr: aws_security_monthly_cost > 1000
+        for: 10m
+        labels:
+          severity: warning
+          service: cost-optimization
+        annotations:
+          summary: "Security services cost threshold exceeded"
+          description: "Monthly security cost is ${{ $value }}, exceeding threshold"
+
+      # CloudTrail logging disabled
+      - alert: CloudTrailDisabled
+        expr: increase(cloudtrail_logging_disabled_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: cloudtrail
+        annotations:
+          summary: "CloudTrail logging disabled"
+          description: "CloudTrail logging has been disabled in {{ $labels.region }}"
+
+      # Failed remediation attempts
+      - alert: RemediationFailure
+        expr: increase(security_remediation_failed_total[10m]) > 3
+        for: 2m
+        labels:
+          severity: warning
+          service: incident-response
+        annotations:
+          summary: "Multiple remediation failures"
+          description: "{{ $value }} remediation attempts failed in the last 10 minutes"
+
+      # Service availability
+      - alert: SecurityAutomationDown
+        expr: up{job="security-automation"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: application
+        annotations:
+          summary: "Security automation service is down"
+          description: "The security automation service has been down for more than 1 minute"
+
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(security_automation_errors_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "High error rate in security automation"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+      # Database connection issues
+      - alert: DatabaseConnectionFailure
+        expr: increase(postgres_connection_errors_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "Database connection failures"
+          description: "{{ $value }} database connection failures in the last 5 minutes"
+
+      # Redis connection issues
+      - alert: RedisConnectionFailure
+        expr: redis_connected_clients == 0
+        for: 1m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis has no connected clients"
+          description: "Redis appears to be unreachable or has no active connections"
+
+      # Disk space usage
+      - alert: DiskSpaceHigh
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 10
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space usage is above 90% on {{ $labels.device }}"
+
+      # Memory usage high
+      - alert: MemoryUsageHigh
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 90%"
+
+      # Processing queue backlog
+      - alert: ProcessingQueueBacklog
+        expr: redis_list_length{key="security_findings_queue"} > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: queue
+        annotations:
+          summary: "Security findings queue backlog"
+          description: "{{ $value }} items in processing queue, possible performance issue"
+
+  - name: security.sla
+    rules:
+      # Finding processing SLA
+      - alert: FindingProcessingSLABreach
+        expr: histogram_quantile(0.95, rate(finding_processing_duration_seconds_bucket[5m])) > 300
+        for: 10m
+        labels:
+          severity: warning
+          service: performance
+        annotations:
+          summary: "Finding processing SLA breach"
+          description: "95th percentile processing time is {{ $value | humanizeDuration }}, exceeding SLA"
+
+      # Notification delivery SLA
+      - alert: NotificationDeliverySLABreach
+        expr: histogram_quantile(0.95, rate(notification_delivery_duration_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+          service: notifications
+        annotations:
+          summary: "Notification delivery SLA breach"
+          description: "95th percentile notification delivery time is {{ $value | humanizeDuration }}"

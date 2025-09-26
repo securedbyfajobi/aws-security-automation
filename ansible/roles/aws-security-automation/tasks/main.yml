@@ -1,0 +1,175 @@
+---
+- name: Copy security automation application files
+  synchronize:
+    src: "{{ playbook_dir }}/../"
+    dest: /opt/security-automation/
+    delete: yes
+    rsync_opts:
+      - "--exclude=ansible"
+      - "--exclude=.git"
+      - "--exclude=.terraform"
+      - "--exclude=terraform.tfstate*"
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+  become_user: security
+  tags: [deployment]
+
+- name: Set correct ownership for application files
+  file:
+    path: /opt/security-automation
+    owner: security
+    group: security
+    recurse: yes
+  tags: [permissions]
+
+- name: Install application requirements
+  pip:
+    requirements: /opt/security-automation/requirements.txt
+    executable: pip3
+  tags: [python]
+
+- name: Copy application configuration
+  template:
+    src: config.yaml.j2
+    dest: /etc/security-automation/config.yaml
+    owner: security
+    group: security
+    mode: '0600'
+  notify: restart security-automation
+  tags: [configuration]
+
+- name: Copy AWS credentials template (if not using IAM roles)
+  template:
+    src: aws-credentials.j2
+    dest: /home/security/.aws/credentials
+    owner: security
+    group: security
+    mode: '0600'
+  when: aws_access_key_id is defined and aws_secret_access_key is defined
+  tags: [aws]
+
+- name: Create AWS config directory
+  file:
+    path: /home/security/.aws
+    state: directory
+    owner: security
+    group: security
+    mode: '0700'
+  tags: [aws]
+
+- name: Configure AWS CLI region
+  copy:
+    content: |
+      [default]
+      region = {{ aws_region | default('eu-west-2') }}
+      output = json
+    dest: /home/security/.aws/config
+    owner: security
+    group: security
+    mode: '0600'
+  tags: [aws]
+
+- name: Create systemd service for security automation
+  template:
+    src: security-automation.service.j2
+    dest: /etc/systemd/system/security-automation.service
+    mode: '0644'
+  notify:
+    - reload systemd
+    - restart security-automation
+  tags: [systemd]
+
+- name: Create systemd service for each security module
+  template:
+    src: security-module.service.j2
+    dest: "/etc/systemd/system/security-{{ item }}.service"
+    mode: '0644'
+  vars:
+    module_name: "{{ item }}"
+  loop:
+    - guardduty
+    - securityhub
+    - compliance
+    - iam-analyzer
+    - cloudtrail
+    - cost-optimizer
+    - incident-response
+  notify:
+    - reload systemd
+  tags: [systemd]
+
+- name: Enable and start security automation services
+  systemd:
+    name: "security-{{ item }}"
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  loop:
+    - automation
+    - guardduty
+    - securityhub
+    - compliance
+    - iam-analyzer
+    - cloudtrail
+    - cost-optimizer
+    - incident-response
+  tags: [services]
+
+- name: Create monitoring scripts
+  template:
+    src: "{{ item }}.j2"
+    dest: "/opt/security-automation/scripts/{{ item }}"
+    owner: security
+    group: security
+    mode: '0755'
+  loop:
+    - health-check.sh
+    - backup.sh
+    - restart-services.sh
+  tags: [scripts]
+
+- name: Setup cron jobs for maintenance
+  cron:
+    name: "{{ item.name }}"
+    minute: "{{ item.minute }}"
+    hour: "{{ item.hour }}"
+    day: "{{ item.day | default('*') }}"
+    job: "{{ item.job }}"
+    user: security
+    state: present
+  loop:
+    - name: "Daily health check"
+      minute: "0"
+      hour: "6"
+      job: "/opt/security-automation/scripts/health-check.sh"
+    - name: "Weekly backup"
+      minute: "0"
+      hour: "2"
+      day: "0"
+      job: "/opt/security-automation/scripts/backup.sh"
+    - name: "Daily log cleanup"
+      minute: "30"
+      hour: "1"
+      job: "find /var/log/security-automation -name '*.log' -mtime +{{ log_retention_days | default(30) }} -delete"
+  when: environment != 'development'
+  tags: [cron]
+
+- name: Configure log aggregation
+  copy:
+    content: |
+      # Security automation logs
+      $ModLoad imfile
+      $InputFileName /var/log/security-automation/app.log
+      $InputFileTag security-automation:
+      $InputFileStateFile stat-security-automation
+      $InputFileSeverity info
+      $InputFileFacility local0
+      $InputRunFileMonitor
+
+      # Send to CloudWatch Logs
+      local0.* @@{{ cloudwatch_logs_endpoint | default('logs.eu-west-2.amazonaws.com:514') }}
+    dest: /etc/rsyslog.d/50-security-automation.conf
+    backup: yes
+  notify: restart rsyslog
+  when: monitoring.install_cloudwatch_agent | default(true)
+  tags: [logging]

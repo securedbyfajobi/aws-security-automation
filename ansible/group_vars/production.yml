@@ -1,0 +1,52 @@
+---
+# Production-specific variables
+environment: production
+log_level: WARNING
+
+# Enhanced security for production
+security_hardening:
+  disable_root_login: true
+  disable_password_auth: true
+  enable_firewall: true
+  install_fail2ban: true
+  update_packages: true
+  enable_audit: true
+  configure_logging: true
+  enable_selinux: true
+  disable_unused_services: true
+  configure_aide: true
+
+# Stricter monitoring in production
+monitoring:
+  install_cloudwatch_agent: true
+  install_node_exporter: true
+  install_filebeat: true
+  log_retention_days: 90
+  enable_detailed_monitoring: true
+  alert_thresholds:
+    cpu_percent: 80
+    memory_percent: 85
+    disk_percent: 90
+
+# Production backup settings
+backup:
+  enable: true
+  s3_bucket: "{{ project_name }}-prod-backups-{{ aws_region }}"
+  retention_days: 90
+  schedule: "0 1 * * *"  # Daily at 1 AM
+  encryption: true
+
+# Production SSL/TLS - more restrictive
+ssl:
+  protocols:
+    - TLSv1.3
+  ciphers: "ECDHE+AESGCM:ECDHE+CHACHA20:!aNULL:!MD5:!DSS:!RC4"
+  dhparam_size: 4096
+  hsts_enabled: true
+
+# Production firewall rules - more restrictive
+firewall_rules:
+  - { port: 22, protocol: tcp, source: "10.0.0.0/8", comment: "SSH from VPC only" }
+  - { port: 443, protocol: tcp, source: "0.0.0.0/0", comment: "HTTPS" }
+  - { port: 9090, protocol: tcp, source: "10.0.0.0/8", comment: "Prometheus from VPC only" }
+  - { port: 3000, protocol: tcp, source: "10.0.0.0/8", comment: "Grafana from VPC only" }

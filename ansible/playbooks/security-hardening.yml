@@ -1,0 +1,297 @@
+---
+- name: Security Hardening Playbook
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    # CIS Benchmark compliance settings
+    cis_compliance: true
+    security_audit_enabled: true
+
+  tasks:
+    - name: Ensure system is up to date
+      package:
+        name: '*'
+        state: latest
+      when: security_hardening.update_packages | default(true)
+      tags: [updates, security]
+
+    - name: Configure SSH hardening
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        backup: yes
+      loop:
+        - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin no' }
+        - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+        - { regexp: '^#?PubkeyAuthentication', line: 'PubkeyAuthentication yes' }
+        - { regexp: '^#?Protocol', line: 'Protocol 2' }
+        - { regexp: '^#?MaxAuthTries', line: 'MaxAuthTries 3' }
+        - { regexp: '^#?ClientAliveInterval', line: 'ClientAliveInterval 300' }
+        - { regexp: '^#?ClientAliveCountMax', line: 'ClientAliveCountMax 2' }
+        - { regexp: '^#?X11Forwarding', line: 'X11Forwarding no' }
+        - { regexp: '^#?AllowTcpForwarding', line: 'AllowTcpForwarding no' }
+        - { regexp: '^#?PermitEmptyPasswords', line: 'PermitEmptyPasswords no' }
+        - { regexp: '^#?IgnoreRhosts', line: 'IgnoreRhosts yes' }
+        - { regexp: '^#?HostbasedAuthentication', line: 'HostbasedAuthentication no' }
+      notify: restart ssh
+      tags: [ssh, security]
+
+    - name: Install and configure fail2ban
+      block:
+        - name: Install fail2ban
+          package:
+            name: fail2ban
+            state: present
+
+        - name: Configure fail2ban for SSH
+          copy:
+            content: |
+              [DEFAULT]
+              bantime = 3600
+              findtime = 600
+              maxretry = 3
+              backend = auto
+
+              [sshd]
+              enabled = true
+              port = ssh
+              filter = sshd
+              logpath = /var/log/auth.log
+              maxretry = 3
+              bantime = 3600
+            dest: /etc/fail2ban/jail.local
+            backup: yes
+          notify: restart fail2ban
+
+        - name: Start and enable fail2ban
+          service:
+            name: fail2ban
+            state: started
+            enabled: yes
+      when: security_hardening.install_fail2ban | default(true)
+      tags: [fail2ban, security]
+
+    - name: Configure firewall (UFW for Ubuntu, firewalld for RHEL)
+      block:
+        - name: Install and configure UFW (Ubuntu/Debian)
+          block:
+            - name: Install ufw
+              package:
+                name: ufw
+                state: present
+
+            - name: Configure UFW defaults
+              ufw:
+                direction: "{{ item.direction }}"
+                policy: "{{ item.policy }}"
+              loop:
+                - { direction: incoming, policy: deny }
+                - { direction: outgoing, policy: allow }
+
+            - name: Allow SSH
+              ufw:
+                rule: allow
+                port: '22'
+                proto: tcp
+
+            - name: Allow HTTPS
+              ufw:
+                rule: allow
+                port: '443'
+                proto: tcp
+
+            - name: Enable UFW
+              ufw:
+                state: enabled
+          when: ansible_os_family == "Debian"
+
+        - name: Install and configure firewalld (RHEL/CentOS/Amazon Linux)
+          block:
+            - name: Install firewalld
+              package:
+                name: firewalld
+                state: present
+
+            - name: Start and enable firewalld
+              service:
+                name: firewalld
+                state: started
+                enabled: yes
+
+            - name: Configure firewalld rules
+              firewalld:
+                port: "{{ item.port }}/{{ item.protocol }}"
+                permanent: true
+                state: enabled
+                immediate: true
+              loop:
+                - { port: 22, protocol: tcp }
+                - { port: 443, protocol: tcp }
+              notify: restart firewalld
+          when: ansible_os_family == "RedHat"
+      when: security_hardening.enable_firewall | default(true)
+      tags: [firewall, security]
+
+    - name: Configure system auditing
+      block:
+        - name: Install auditd
+          package:
+            name: "{{ 'auditd' if ansible_os_family == 'RedHat' else 'auditd' }}"
+            state: present
+
+        - name: Configure audit rules
+          copy:
+            content: |
+              # Delete all existing rules
+              -D
+
+              # Buffer Size
+              -b 8192
+
+              # Failure Mode
+              -f 1
+
+              # Audit the audit logs
+              -w /var/log/audit/ -p wa -k auditlog
+
+              # Audit the system configuration
+              -w /etc/audit/ -p wa -k auditconfig
+              -w /etc/libaudit.conf -p wa -k auditconfig
+              -w /etc/audisp/ -p wa -k audispconfig
+
+              # Monitor for use of audit management tools
+              -w /sbin/auditctl -p x -k audittools
+              -w /sbin/auditd -p x -k audittools
+
+              # Audit system calls
+              -a always,exit -F arch=b64 -S adjtimex -S settimeofday -k time-change
+              -a always,exit -F arch=b32 -S adjtimex -S settimeofday -S stime -k time-change
+              -a always,exit -F arch=b64 -S clock_settime -k time-change
+              -a always,exit -F arch=b32 -S clock_settime -k time-change
+
+              # Audit file access
+              -a always,exit -F arch=b64 -S chmod -S fchmod -S fchmodat -F auid>=1000 -F auid!=4294967295 -k perm_mod
+              -a always,exit -F arch=b32 -S chmod -S fchmod -S fchmodat -F auid>=1000 -F auid!=4294967295 -k perm_mod
+
+              # Monitor privileged commands
+              -a always,exit -F path=/usr/bin/su -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged
+              -a always,exit -F path=/usr/bin/sudo -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged
+
+              # Make the configuration immutable
+              -e 2
+            dest: /etc/audit/rules.d/security-automation.rules
+            backup: yes
+          notify: restart auditd
+
+        - name: Start and enable auditd
+          service:
+            name: auditd
+            state: started
+            enabled: yes
+      when: security_hardening.enable_audit | default(true)
+      tags: [audit, security]
+
+    - name: Install and configure security tools
+      block:
+        - name: Install security scanning tools
+          package:
+            name:
+              - aide
+              - rkhunter
+              - clamav
+              - clamav-daemon
+            state: present
+          when: ansible_os_family == "RedHat"
+
+        - name: Install security scanning tools (Ubuntu/Debian)
+          package:
+            name:
+              - aide
+              - rkhunter
+              - clamav
+              - clamav-daemon
+            state: present
+          when: ansible_os_family == "Debian"
+
+        - name: Initialize AIDE database
+          shell: aide --init
+          args:
+            creates: /var/lib/aide/aide.db.new.gz
+          register: aide_init
+
+        - name: Move AIDE database to production location
+          shell: mv /var/lib/aide/aide.db.new.gz /var/lib/aide/aide.db.gz
+          when: aide_init.changed
+
+        - name: Configure daily AIDE check
+          cron:
+            name: "AIDE integrity check"
+            minute: "0"
+            hour: "2"
+            job: "/usr/bin/aide --check | mail -s 'AIDE Report' root"
+            state: present
+
+        - name: Update rkhunter database
+          shell: rkhunter --update
+          changed_when: false
+
+        - name: Update ClamAV signatures
+          shell: freshclam
+          changed_when: false
+      when: security_tools.install_aide | default(true)
+      tags: [security-tools, security]
+
+    - name: Configure kernel security parameters
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        # Network security
+        - { name: net.ipv4.ip_forward, value: 0 }
+        - { name: net.ipv4.conf.all.send_redirects, value: 0 }
+        - { name: net.ipv4.conf.default.send_redirects, value: 0 }
+        - { name: net.ipv4.conf.all.accept_source_route, value: 0 }
+        - { name: net.ipv4.conf.default.accept_source_route, value: 0 }
+        - { name: net.ipv4.conf.all.accept_redirects, value: 0 }
+        - { name: net.ipv4.conf.default.accept_redirects, value: 0 }
+        - { name: net.ipv4.conf.all.secure_redirects, value: 0 }
+        - { name: net.ipv4.conf.default.secure_redirects, value: 0 }
+        - { name: net.ipv4.conf.all.log_martians, value: 1 }
+        - { name: net.ipv4.conf.default.log_martians, value: 1 }
+        - { name: net.ipv4.icmp_echo_ignore_broadcasts, value: 1 }
+        - { name: net.ipv4.icmp_ignore_bogus_error_responses, value: 1 }
+        - { name: net.ipv4.conf.all.rp_filter, value: 1 }
+        - { name: net.ipv4.conf.default.rp_filter, value: 1 }
+        - { name: net.ipv4.tcp_syncookies, value: 1 }
+        # Memory protection
+        - { name: kernel.exec-shield, value: 1 }
+        - { name: kernel.randomize_va_space, value: 2 }
+        # Restrict core dumps
+        - { name: fs.suid_dumpable, value: 0 }
+      tags: [kernel, security]
+
+  handlers:
+    - name: restart ssh
+      service:
+        name: "{{ 'sshd' if ansible_os_family == 'RedHat' else 'ssh' }}"
+        state: restarted
+
+    - name: restart fail2ban
+      service:
+        name: fail2ban
+        state: restarted
+
+    - name: restart firewalld
+      service:
+        name: firewalld
+        state: restarted
+
+    - name: restart auditd
+      service:
+        name: auditd
+        state: restarted

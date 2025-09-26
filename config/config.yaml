@@ -1,0 +1,160 @@
+# AWS Security Automation Configuration
+# Environment: Production
+
+aws:
+  region: eu-west-2
+  profile: default
+
+security_settings:
+  # GuardDuty Configuration
+  guardduty:
+    enabled: true
+    auto_enable_new_accounts: true
+    finding_publishing_frequency: "FIFTEEN_MINUTES"
+    threat_intel_sets:
+      - name: "custom-threat-intel"
+        location: "s3://security-threat-intel/custom-list.txt"
+        format: "TXT"
+
+    severity_thresholds:
+      critical: 8.5
+      high: 7.0
+      medium: 4.0
+      low: 0.0
+
+    auto_remediation:
+      enabled: false
+      actions:
+        - type: "isolate_instance"
+          findings: ["CryptoCurrency:EC2/BitcoinTool.B!DNS"]
+        - type: "disable_user"
+          findings: ["Stealth:IAMUser/CloudTrailLoggingDisabled"]
+
+  # Security Hub Configuration
+  security_hub:
+    enabled: true
+    enable_default_standards: true
+    standards:
+      - "arn:aws:securityhub:us-east-1::standard/aws-foundational-security"
+      - "arn:aws:securityhub:us-east-1::standard/cis-aws-foundations-benchmark/v/1.2.0"
+      - "arn:aws:securityhub:us-east-1::standard/pci-dss/v/3.2.1"
+
+    custom_insights:
+      - name: "Critical Security Issues"
+        filters:
+          ComplianceStatus: ["FAILED"]
+          SeverityLabel: ["CRITICAL", "HIGH"]
+      - name: "Unresolved Findings"
+        filters:
+          WorkflowStatus: ["NEW"]
+          RecordState: ["ACTIVE"]
+
+  # Config Configuration
+  config:
+    enabled: true
+    configuration_recorder: "security-recorder"
+    delivery_channel: "security-delivery-channel"
+    rules:
+      - "encrypted-volumes"
+      - "root-mfa-enabled"
+      - "iam-password-policy"
+      - "cloudtrail-enabled"
+      - "s3-bucket-public-access-prohibited"
+
+notifications:
+  # Slack Integration
+  slack:
+    enabled: true
+    webhook_url: ${SLACK_WEBHOOK_URL}
+    channels:
+      critical: "#security-critical"
+      high: "#security-alerts"
+      medium: "#security-monitoring"
+      reports: "#security-reports"
+
+    message_format:
+      include_account_id: true
+      include_region: true
+      include_remediation_steps: true
+
+  # Email Notifications
+  email:
+    enabled: true
+    smtp_server: "smtp.company.com"
+    smtp_port: 587
+    smtp_username: ${SMTP_USERNAME}
+    smtp_password: ${SMTP_PASSWORD}
+
+    recipients:
+      critical: ["security-team@company.com", "ciso@company.com"]
+      high: ["security-team@company.com"]
+      reports: ["security-reports@company.com"]
+
+  # PagerDuty Integration
+  pagerduty:
+    enabled: false
+    integration_key: ${PAGERDUTY_INTEGRATION_KEY}
+    severity_mapping:
+      critical: "critical"
+      high: "error"
+      medium: "warning"
+
+compliance:
+  frameworks:
+    cis:
+      version: "1.4.0"
+      enabled_controls: ["1.1", "1.2", "1.3", "2.1", "3.1"]
+    pci_dss:
+      version: "3.2.1"
+      scope: ["cardholder_data_environment"]
+    nist:
+      framework: "800-53"
+      controls: ["AC-2", "AU-2", "CM-2", "IA-2"]
+
+reporting:
+  # Report Generation
+  schedule:
+    daily_summary: "08:00 UTC"
+    weekly_report: "MON 09:00 UTC"
+    monthly_report: "1st 10:00 UTC"
+
+  formats: ["json", "html", "pdf"]
+  retention_days: 90
+
+  s3_bucket: ${REPORTS_BUCKET}
+  s3_prefix: "security-reports/"
+
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+  destinations:
+    - type: "cloudwatch"
+      log_group: "/aws/security-automation"
+    - type: "s3"
+      bucket: ${LOGS_BUCKET}
+      prefix: "application-logs/"
+
+cost_optimization:
+  enabled: true
+  thresholds:
+    monthly_spend: 1000.0
+    unused_resources: 100.0
+
+  scan_frequency: "weekly"
+  exclude_resources:
+    - "production-*"
+    - "critical-*"
+
+remediation:
+  auto_remediation:
+    enabled: false
+    dry_run: true
+
+  manual_approval_required:
+    - "ec2_termination"
+    - "iam_user_deletion"
+    - "s3_bucket_deletion"
+
+  timeout_minutes: 30
+  max_retries: 3

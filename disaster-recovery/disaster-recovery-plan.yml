@@ -1,0 +1,450 @@
+---
+# Comprehensive Disaster Recovery Plan for AWS Security Automation
+# This document outlines procedures, contact information, and recovery steps
+
+disaster_recovery:
+  metadata:
+    version: "2.0"
+    created_date: "2024-01-01"
+    last_updated: "2024-01-15"
+    owner: "Security Operations Team"
+    approved_by: "Chief Security Officer"
+    review_frequency: "Quarterly"
+
+  # Recovery Time Objectives and Recovery Point Objectives
+  objectives:
+    rto_minutes: 240    # Recovery Time Objective: 4 hours
+    rpo_minutes: 60     # Recovery Point Objective: 1 hour
+    maximum_tolerable_downtime: 480  # 8 hours
+    data_loss_tolerance: 60  # 1 hour max data loss
+
+  # Disaster Categories and Severity Levels
+  disaster_categories:
+    - category: "infrastructure_failure"
+      description: "AWS region outage, data center failure"
+      severity: "high"
+      trigger_conditions:
+        - "Primary region unavailable for >30 minutes"
+        - "Multiple AZ failure in primary region"
+
+    - category: "data_corruption"
+      description: "Database corruption, file system corruption"
+      severity: "critical"
+      trigger_conditions:
+        - "Database integrity check failures"
+        - "Application data inconsistencies"
+        - "Security log tampering detected"
+
+    - category: "security_incident"
+      description: "Breach, ransomware, insider threat"
+      severity: "critical"
+      trigger_conditions:
+        - "Confirmed data breach"
+        - "Ransomware detection"
+        - "Unauthorized administrative access"
+
+    - category: "application_failure"
+      description: "Critical application bugs, dependency failures"
+      severity: "medium"
+      trigger_conditions:
+        - "Application unavailable for >1 hour"
+        - "Critical security monitoring offline"
+
+  # Primary and Secondary Sites Configuration
+  sites:
+    primary:
+      region: "eu-west-2"
+      vpc_id: "vpc-primary-123456"
+      availability_zones:
+        - "eu-west-2a"
+        - "eu-west-2b"
+        - "eu-west-2c"
+      key_resources:
+        - "Application Load Balancers"
+        - "EC2 Security Automation Instances"
+        - "RDS Primary Database"
+        - "ElastiCache Redis Cluster"
+        - "S3 Security Logs Bucket"
+
+    secondary:
+      region: "us-west-2"
+      vpc_id: "vpc-secondary-789012"
+      availability_zones:
+        - "us-west-2a"
+        - "us-west-2b"
+        - "us-west-2c"
+      key_resources:
+        - "Standby Application Infrastructure"
+        - "RDS Read Replica (can be promoted)"
+        - "Cross-region S3 replication"
+        - "Route 53 Health Checks"
+
+  # Emergency Contact Information
+  emergency_contacts:
+    primary_oncall:
+      role: "Security Operations Lead"
+      phone: "+44-XXX-XXX-XXXX"
+      email: "security-oncall@company.com"
+      escalation_time: 30  # minutes
+
+    secondary_oncall:
+      role: "Infrastructure Lead"
+      phone: "+44-XXX-XXX-YYYY"
+      email: "infra-oncall@company.com"
+      escalation_time: 60  # minutes
+
+    management:
+      role: "Chief Security Officer"
+      phone: "+44-XXX-XXX-ZZZZ"
+      email: "cso@company.com"
+      escalation_time: 120  # minutes
+
+    vendors:
+      aws_support:
+        tier: "Enterprise"
+        phone: "+1-XXX-XXX-XXXX"
+        case_priority: "Critical"
+
+  # Recovery Procedures by Disaster Type
+  recovery_procedures:
+    infrastructure_failure:
+      phase1_assessment:
+        duration: "15 minutes"
+        steps:
+          - "Verify AWS Service Health Dashboard"
+          - "Check primary region availability"
+          - "Assess scope of outage"
+          - "Notify incident commander"
+          - "Activate war room communications"
+
+      phase2_failover_decision:
+        duration: "30 minutes"
+        decision_criteria:
+          - "Estimated primary region recovery time > RTO"
+          - "Critical services unavailable"
+          - "AWS confirms extended outage"
+        steps:
+          - "Assess business impact"
+          - "Get approval from incident commander"
+          - "Notify all stakeholders"
+
+      phase3_failover_execution:
+        duration: "60-120 minutes"
+        steps:
+          - name: "DNS Failover"
+            command: "aws route53 change-resource-record-sets"
+            description: "Update Route 53 to point to secondary region"
+
+          - name: "Database Promotion"
+            command: "aws rds promote-read-replica"
+            description: "Promote RDS read replica to primary"
+
+          - name: "Application Deployment"
+            command: "ansible-playbook -i inventory/disaster-recovery.yml deploy-dr.yml"
+            description: "Deploy applications in secondary region"
+
+          - name: "Security Services Activation"
+            description: "Enable GuardDuty, Security Hub in secondary region"
+
+          - name: "Monitoring Setup"
+            description: "Configure CloudWatch, Prometheus in secondary region"
+
+      phase4_verification:
+        duration: "30 minutes"
+        verification_steps:
+          - "Health check endpoints responding"
+          - "Database connectivity confirmed"
+          - "Security monitoring active"
+          - "Log aggregation functioning"
+          - "User authentication working"
+
+    data_corruption:
+      phase1_containment:
+        duration: "30 minutes"
+        steps:
+          - "Isolate affected systems"
+          - "Stop data replication to prevent spread"
+          - "Create forensic copies"
+          - "Document evidence"
+
+      phase2_assessment:
+        duration: "60 minutes"
+        steps:
+          - "Determine corruption scope"
+          - "Identify last known good backup"
+          - "Calculate data loss window"
+          - "Assess restoration time"
+
+      phase3_restoration:
+        duration: "90-180 minutes"
+        steps:
+          - "Restore from point-in-time backup"
+          - "Verify data integrity"
+          - "Replay transactions if possible"
+          - "Update security configurations"
+
+    security_incident:
+      phase1_immediate_response:
+        duration: "15 minutes"
+        steps:
+          - "Isolate compromised systems"
+          - "Preserve evidence"
+          - "Notify legal/compliance teams"
+          - "Activate incident response team"
+
+      phase2_containment:
+        duration: "60 minutes"
+        steps:
+          - "Block malicious traffic"
+          - "Revoke compromised credentials"
+          - "Isolate affected network segments"
+          - "Deploy additional monitoring"
+
+      phase3_recovery:
+        duration: "120-240 minutes"
+        steps:
+          - "Rebuild compromised systems"
+          - "Restore from clean backups"
+          - "Implement additional security controls"
+          - "Conduct security validation"
+
+  # Automated Recovery Scripts
+  automation:
+    scripts:
+      failover_dns:
+        path: "/opt/disaster-recovery/scripts/failover-dns.sh"
+        description: "Automated DNS failover to secondary region"
+        parameters:
+          - primary_region
+          - secondary_region
+          - hosted_zone_id
+
+      promote_database:
+        path: "/opt/disaster-recovery/scripts/promote-rds-replica.sh"
+        description: "Promote RDS read replica to primary"
+        parameters:
+          - replica_identifier
+          - backup_retention_days
+
+      deploy_secondary:
+        path: "/opt/disaster-recovery/scripts/deploy-secondary-infrastructure.sh"
+        description: "Deploy full infrastructure in secondary region"
+        parameters:
+          - target_region
+          - environment_name
+
+      restore_backup:
+        path: "/opt/disaster-recovery/scripts/restore-from-backup.py"
+        description: "Restore systems from backup"
+        parameters:
+          - restore_point_id
+          - target_environment
+
+    monitoring:
+      health_checks:
+        - endpoint: "https://security-automation.company.com/health"
+          interval: 60  # seconds
+          timeout: 10
+          failure_threshold: 3
+
+        - endpoint: "https://prometheus.company.com/-/healthy"
+          interval: 30
+          timeout: 5
+          failure_threshold: 2
+
+      automated_failover:
+        enabled: false  # Manual approval required
+        conditions:
+          - "Primary health check fails for >10 minutes"
+          - "Database connectivity lost for >5 minutes"
+          - "Security monitoring offline for >15 minutes"
+
+  # Communication Plan
+  communication:
+    notification_channels:
+      slack:
+        channel: "#incident-response"
+        webhook: "${INCIDENT_SLACK_WEBHOOK}"
+
+      email:
+        distribution_list: "incident-response@company.com"
+        escalation_list: "executive-team@company.com"
+
+      sms:
+        primary_number: "+44-XXX-XXX-XXXX"
+        secondary_number: "+44-XXX-XXX-YYYY"
+
+    message_templates:
+      incident_declared:
+        subject: "[INCIDENT] Disaster Recovery Activated - {{disaster_type}}"
+        body: |
+          Disaster recovery has been activated for AWS Security Automation.
+
+          Incident Details:
+          - Type: {{disaster_type}}
+          - Severity: {{severity}}
+          - Started: {{start_time}}
+          - Expected Resolution: {{eta}}
+
+          Current Status: {{status}}
+
+          Incident Commander: {{commander}}
+          Updates will be provided every 30 minutes.
+
+      status_update:
+        subject: "[UPDATE] Disaster Recovery Status - {{incident_id}}"
+        body: |
+          Disaster Recovery Update - {{timestamp}}
+
+          Current Status: {{status}}
+          Progress: {{progress_percentage}}%
+
+          Completed Actions:
+          {{completed_actions}}
+
+          Next Actions:
+          {{next_actions}}
+
+          ETA: {{eta}}
+
+      all_clear:
+        subject: "[RESOLVED] Disaster Recovery Complete - {{incident_id}}"
+        body: |
+          Disaster recovery operations have been completed.
+
+          Recovery Summary:
+          - Total Downtime: {{total_downtime}}
+          - Data Loss: {{data_loss}}
+          - Services Restored: {{services_restored}}
+
+          Post-incident review scheduled for: {{review_date}}
+
+  # Testing and Validation
+  testing:
+    schedule:
+      full_dr_test:
+        frequency: "Quarterly"
+        duration: "4 hours"
+        participants: ["Security Team", "Infrastructure Team", "Management"]
+
+      partial_dr_test:
+        frequency: "Monthly"
+        duration: "2 hours"
+        participants: ["Security Team", "Infrastructure Team"]
+
+      tabletop_exercise:
+        frequency: "Bi-monthly"
+        duration: "1 hour"
+        participants: ["All stakeholders"]
+
+    test_scenarios:
+      - name: "Region Failure Simulation"
+        description: "Simulate primary region outage"
+        steps:
+          - "Block access to primary region resources"
+          - "Execute failover procedures"
+          - "Validate secondary region functionality"
+          - "Measure recovery time"
+
+      - name: "Database Corruption Test"
+        description: "Test database recovery procedures"
+        steps:
+          - "Create test corruption scenario"
+          - "Execute backup restoration"
+          - "Validate data integrity"
+          - "Test application connectivity"
+
+      - name: "Security Breach Simulation"
+        description: "Test incident response procedures"
+        steps:
+          - "Simulate security incident"
+          - "Execute containment procedures"
+          - "Test communication channels"
+          - "Validate recovery processes"
+
+  # Metrics and KPIs
+  metrics:
+    recovery_metrics:
+      - name: "Mean Time to Recovery (MTTR)"
+        target: "< 240 minutes"
+        measurement: "Time from incident start to full service restoration"
+
+      - name: "Recovery Point Objective (RPO)"
+        target: "< 60 minutes"
+        measurement: "Maximum acceptable data loss"
+
+      - name: "Service Availability"
+        target: "> 99.9%"
+        measurement: "Percentage uptime over rolling 30-day period"
+
+    testing_metrics:
+      - name: "DR Test Success Rate"
+        target: "> 95%"
+        measurement: "Percentage of successful DR tests"
+
+      - name: "RTO Achievement Rate"
+        target: "> 90%"
+        measurement: "Percentage of tests meeting RTO targets"
+
+  # Dependencies and Integrations
+  dependencies:
+    external_services:
+      - service: "AWS Services"
+        criticality: "High"
+        backup_provider: "Microsoft Azure (future)"
+
+      - service: "Slack"
+        criticality: "Medium"
+        backup_provider: "Email notifications"
+
+      - service: "PagerDuty"
+        criticality: "Medium"
+        backup_provider: "SMS/phone calls"
+
+    internal_systems:
+      - system: "Active Directory"
+        criticality: "High"
+        dr_plan: "Replicated to secondary region"
+
+      - system: "Certificate Authority"
+        criticality: "High"
+        dr_plan: "Backup certificates stored in secure storage"
+
+  # Post-Incident Activities
+  post_incident:
+    immediate_actions:
+      - "Conduct hot wash/debrief session"
+      - "Document lessons learned"
+      - "Update incident timeline"
+      - "Notify stakeholders of resolution"
+
+    follow_up_actions:
+      - "Schedule formal post-incident review"
+      - "Update disaster recovery procedures"
+      - "Implement preventive measures"
+      - "Update team training"
+
+    documentation:
+      incident_report:
+        template: "/templates/incident-report.md"
+        recipients: ["Management", "Security Team", "Compliance"]
+
+      lessons_learned:
+        template: "/templates/lessons-learned.md"
+        action_items: true
+        review_date: "+2 weeks"
+
+# Document Control
+document_control:
+  classification: "Internal"
+  retention_period: "7 years"
+  next_review_date: "2024-04-01"
+  change_history:
+    - version: "1.0"
+      date: "2023-10-01"
+      author: "Security Team"
+      changes: "Initial version"
+    - version: "2.0"
+      date: "2024-01-15"
+      author: "Security Team"
+      changes: "Added automation scripts and enhanced procedures"

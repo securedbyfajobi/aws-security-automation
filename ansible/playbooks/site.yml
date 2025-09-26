@@ -1,0 +1,69 @@
+---
+- name: Complete Security Automation Infrastructure Setup
+  hosts: all
+  become: yes
+  gather_facts: yes
+  serial: "{{ serial_execution | default('100%') }}"
+
+  pre_tasks:
+    - name: Update apt cache (Ubuntu/Debian)
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+      tags: [always]
+
+    - name: Update yum cache (RHEL/CentOS/Amazon Linux)
+      yum:
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+      tags: [always]
+
+  roles:
+    - role: common
+      tags: [common, base]
+    - role: security-hardening
+      tags: [security, hardening]
+    - role: monitoring
+      tags: [monitoring, observability]
+    - role: docker
+      tags: [docker, containers]
+      when: docker.install | default(false)
+    - role: aws-security-automation
+      tags: [application, security-automation]
+    - role: backup
+      tags: [backup, disaster-recovery]
+    - role: compliance
+      tags: [compliance, audit]
+
+  post_tasks:
+    - name: Restart services if needed
+      service:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - ssh
+        - rsyslog
+      when: service_restart_required | default(false)
+      tags: [always]
+
+    - name: Verify security automation service
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:8000/health"
+        method: GET
+        timeout: 10
+      register: health_check
+      failed_when: false
+      changed_when: false
+      tags: [verification]
+
+    - name: Display deployment summary
+      debug:
+        msg: |
+          Deployment completed successfully for {{ inventory_hostname }}
+          - Environment: {{ environment | default('dev') }}
+          - Security hardening: {{ 'Enabled' if security_hardening.enable | default(true) else 'Disabled' }}
+          - Monitoring: {{ 'Enabled' if monitoring.install_cloudwatch_agent | default(true) else 'Disabled' }}
+          - Backup: {{ 'Enabled' if backup.enable | default(true) else 'Disabled' }}
+          - Health check: {{ 'PASS' if health_check.status == 200 else 'FAIL' }}
+      tags: [always]

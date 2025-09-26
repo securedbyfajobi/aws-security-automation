@@ -1,0 +1,288 @@
+---
+# Advanced Security Tools Configuration
+security_tools:
+  # Static Code Analysis
+  code_analysis:
+    - name: bandit
+      enabled: true
+      config_file: .bandit
+      severity_levels: [HIGH, MEDIUM]
+
+    - name: semgrep
+      enabled: true
+      config: "auto"
+      rules:
+        - p/security-audit
+        - p/secrets
+        - p/owasp-top-ten
+
+    - name: codeql
+      enabled: true
+      languages: [python, javascript, typescript]
+
+    - name: sonarqube
+      enabled: false  # Requires separate server
+      project_key: aws-security-automation
+      quality_gate: true
+
+  # Dependency Scanning
+  dependency_scan:
+    - name: safety
+      enabled: true
+      ignore_ids: []
+
+    - name: pip-audit
+      enabled: true
+      format: json
+
+    - name: snyk
+      enabled: true
+      severity_threshold: medium
+
+    - name: retire.js
+      enabled: true
+      severity: medium
+
+  # Container Security
+  container_security:
+    - name: trivy
+      enabled: true
+      scan_types:
+        - vulnerabilities
+        - secrets
+        - config
+        - license
+      severity: HIGH,CRITICAL
+
+    - name: grype
+      enabled: true
+      output: json
+      fail_on: critical
+
+    - name: docker-bench
+      enabled: true
+      checks: [1,2,3,4,5,6,7]
+
+    - name: clair
+      enabled: false
+      api_url: http://clair:6060
+
+  # Infrastructure Scanning
+  infrastructure_scan:
+    - name: checkov
+      enabled: true
+      frameworks:
+        - terraform
+        - cloudformation
+        - kubernetes
+        - dockerfile
+      skip_checks: []
+
+    - name: tfsec
+      enabled: true
+      format: json
+      minimum_severity: MEDIUM
+
+    - name: terrascan
+      enabled: true
+      policy_type: [aws, azure, gcp, kubernetes]
+
+    - name: kics
+      enabled: true
+      platforms: [terraform, cloudformation, ansible]
+
+  # Network Security
+  network_security:
+    - name: nmap
+      enabled: true
+      scripts:
+        - vuln
+        - auth
+        - discovery
+      timing_template: 3
+
+    - name: masscan
+      enabled: false
+      rate: 1000
+
+    - name: nuclei
+      enabled: true
+      templates:
+        - cves
+        - vulnerabilities
+        - exposures
+        - misconfigurations
+
+  # Web Application Security
+  web_app_security:
+    - name: zap
+      enabled: true
+      scan_mode: active
+      authentication: false
+
+    - name: nikto
+      enabled: true
+      tuning: 9
+
+    - name: gobuster
+      enabled: false
+      wordlist: /usr/share/wordlists/dirb/common.txt
+
+  # Cloud Security
+  cloud_security:
+    - name: prowler
+      enabled: true
+      provider: aws
+      services: [iam, s3, ec2, rds, lambda]
+      compliance: [cis, gdpr, hipaa, pci]
+
+    - name: scout-suite
+      enabled: true
+      provider: aws
+      services: [iam, s3, ec2, rds, cloudtrail]
+
+    - name: cloudsploit
+      enabled: true
+      plugins: all
+
+    - name: pacu
+      enabled: false  # Requires manual configuration
+
+# Vulnerability Feeds
+vulnerability_feeds:
+  nvd:
+    enabled: true
+    api_key: ${NVD_API_KEY}
+    update_interval: 3600  # 1 hour
+
+  mitre_cve:
+    enabled: true
+    feed_url: https://cve.mitre.org/data/downloads/allitems.csv
+    update_interval: 86400  # 24 hours
+
+  aws_security_bulletins:
+    enabled: true
+    rss_feed: https://aws.amazon.com/security/security-bulletins/rss/
+    update_interval: 3600
+
+  github_security_advisories:
+    enabled: true
+    token: ${GITHUB_TOKEN}
+    ecosystems: [pip, npm, rubygems]
+
+# Scanning Schedules
+schedules:
+  full_scan:
+    cron: "0 2 * * 0"  # Weekly on Sunday at 2 AM
+    scope: all
+
+  quick_scan:
+    cron: "0 */6 * * *"  # Every 6 hours
+    scope: critical
+
+  dependency_scan:
+    cron: "0 1 * * *"  # Daily at 1 AM
+    scope: dependencies
+
+  container_scan:
+    cron: "0 3 * * *"  # Daily at 3 AM
+    scope: containers
+
+# Notification Settings
+notifications:
+  channels:
+    slack:
+      enabled: true
+      webhook_url: ${SLACK_WEBHOOK_URL}
+      channel: "#security-alerts"
+      severity_threshold: HIGH
+
+    email:
+      enabled: true
+      smtp_server: ${SMTP_SERVER}
+      recipients:
+        - security-team@company.com
+        - devops-team@company.com
+      severity_threshold: CRITICAL
+
+    sns:
+      enabled: true
+      topic_arn: ${SNS_TOPIC_ARN}
+      severity_threshold: HIGH
+
+    pagerduty:
+      enabled: false
+      service_key: ${PAGERDUTY_SERVICE_KEY}
+      severity_threshold: CRITICAL
+
+# Reporting
+reporting:
+  formats:
+    - json
+    - html
+    - pdf
+    - sarif
+
+  retention:
+    scan_results: 90  # days
+    reports: 365  # days
+
+  s3_storage:
+    enabled: true
+    bucket: ${SECURITY_REPORTS_BUCKET}
+    prefix: vulnerability-scans/
+    encryption: AES256
+
+  compliance_reports:
+    cis: true
+    nist: true
+    pci_dss: true
+    sox: true
+    gdpr: true
+
+# Integration Settings
+integrations:
+  jira:
+    enabled: false
+    url: ${JIRA_URL}
+    project: SEC
+    issue_type: Security Bug
+    severity_mapping:
+      CRITICAL: Critical
+      HIGH: High
+      MEDIUM: Medium
+      LOW: Low
+
+  servicenow:
+    enabled: false
+    instance: ${SERVICENOW_INSTANCE}
+    table: incident
+
+  splunk:
+    enabled: true
+    hec_url: ${SPLUNK_HEC_URL}
+    token: ${SPLUNK_HEC_TOKEN}
+    index: security
+
+  elasticsearch:
+    enabled: false
+    hosts:
+      - ${ELASTICSEARCH_HOST}:9200
+    index: vulnerability-scans
+
+# Quality Gates
+quality_gates:
+  build_pipeline:
+    max_critical: 0
+    max_high: 5
+    max_medium: 20
+
+  deployment_pipeline:
+    max_critical: 0
+    max_high: 2
+    max_medium: 10
+
+  production:
+    max_critical: 0
+    max_high: 1
+    max_medium: 5

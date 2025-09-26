@@ -1,0 +1,196 @@
+---
+- name: Install Node Exporter
+  block:
+    - name: Create node_exporter user
+      user:
+        name: node_exporter
+        system: yes
+        shell: /bin/false
+        home: /var/lib/node_exporter
+        create_home: no
+
+    - name: Download Node Exporter
+      get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz"
+        dest: /tmp/node_exporter.tar.gz
+        mode: '0644'
+
+    - name: Extract Node Exporter
+      unarchive:
+        src: /tmp/node_exporter.tar.gz
+        dest: /tmp
+        remote_src: yes
+
+    - name: Copy Node Exporter binary
+      copy:
+        src: /tmp/node_exporter-1.7.0.linux-amd64/node_exporter
+        dest: /usr/local/bin/node_exporter
+        mode: '0755'
+        owner: node_exporter
+        group: node_exporter
+        remote_src: yes
+
+    - name: Create Node Exporter systemd service
+      copy:
+        content: |
+          [Unit]
+          Description=Node Exporter
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          User=node_exporter
+          Group=node_exporter
+          Type=simple
+          ExecStart=/usr/local/bin/node_exporter \
+                    --collector.systemd \
+                    --collector.processes \
+                    --web.listen-address=:9100
+          Restart=always
+          RestartSec=3
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/node_exporter.service
+      notify:
+        - reload systemd
+        - restart node_exporter
+
+    - name: Start and enable Node Exporter
+      systemd:
+        name: node_exporter
+        enabled: yes
+        state: started
+        daemon_reload: yes
+  when: monitoring.install_node_exporter | default(true)
+  tags: [node_exporter]
+
+- name: Install CloudWatch Agent
+  block:
+    - name: Download CloudWatch Agent
+      get_url:
+        url: "https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm"
+        dest: /tmp/amazon-cloudwatch-agent.rpm
+        mode: '0644'
+      when: ansible_os_family == "RedHat"
+
+    - name: Install CloudWatch Agent (RHEL/CentOS/Amazon Linux)
+      package:
+        name: /tmp/amazon-cloudwatch-agent.rpm
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install CloudWatch Agent (Ubuntu/Debian)
+      block:
+        - name: Download CloudWatch Agent (Ubuntu/Debian)
+          get_url:
+            url: "https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb"
+            dest: /tmp/amazon-cloudwatch-agent.deb
+            mode: '0644'
+
+        - name: Install CloudWatch Agent
+          apt:
+            deb: /tmp/amazon-cloudwatch-agent.deb
+            state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Create CloudWatch Agent configuration
+      template:
+        src: cloudwatch-agent-config.json.j2
+        dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+        mode: '0644'
+      notify: restart cloudwatch-agent
+
+    - name: Start and enable CloudWatch Agent
+      systemd:
+        name: amazon-cloudwatch-agent
+        enabled: yes
+        state: started
+        daemon_reload: yes
+  when: monitoring.install_cloudwatch_agent | default(true)
+  tags: [cloudwatch]
+
+- name: Install Filebeat
+  block:
+    - name: Add Elastic repository key
+      apt_key:
+        url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Add Elastic repository
+      apt_repository:
+        repo: "deb https://artifacts.elastic.co/packages/8.x/apt stable main"
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Install Filebeat (Ubuntu/Debian)
+      apt:
+        name: filebeat
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Add Elastic repository (RHEL/CentOS/Amazon Linux)
+      yum_repository:
+        name: elasticsearch
+        description: Elasticsearch repository for 8.x packages
+        baseurl: https://artifacts.elastic.co/packages/8.x/yum
+        gpgcheck: yes
+        gpgkey: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+        enabled: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Install Filebeat (RHEL/CentOS/Amazon Linux)
+      yum:
+        name: filebeat
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Configure Filebeat
+      template:
+        src: filebeat.yml.j2
+        dest: /etc/filebeat/filebeat.yml
+        backup: yes
+        mode: '0600'
+      notify: restart filebeat
+
+    - name: Start and enable Filebeat
+      systemd:
+        name: filebeat
+        enabled: yes
+        state: started
+  when: monitoring.install_filebeat | default(true)
+  tags: [filebeat]
+
+- name: Create monitoring directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /etc/prometheus
+    - /var/lib/prometheus
+    - /etc/grafana/provisioning/datasources
+    - /etc/grafana/provisioning/dashboards
+  tags: [directories]
+
+- name: Copy custom monitoring scripts
+  template:
+    src: "{{ item }}.j2"
+    dest: "/usr/local/bin/{{ item }}"
+    mode: '0755'
+  loop:
+    - security-metrics-collector.sh
+    - system-health-check.sh
+  tags: [scripts]
+
+- name: Setup custom metrics collection
+  cron:
+    name: "Security metrics collection"
+    minute: "*/5"
+    job: "/usr/local/bin/security-metrics-collector.sh"
+    state: present
+  tags: [cron]

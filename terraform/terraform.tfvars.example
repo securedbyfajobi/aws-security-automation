@@ -1,0 +1,29 @@
+# AWS Configuration
+aws_region  = "eu-west-2"
+environment = "prod"
+
+# Project Configuration
+project_name = "aws-security-automation"
+
+# Notification Configuration
+notification_email = "security-team@company.com"
+slack_webhook_url  = "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+
+# Security Services
+enable_guardduty    = true
+enable_security_hub = true
+enable_config       = true
+
+# Compliance Standards
+compliance_standards = ["CIS", "PCI-DSS", "AWS-Foundational", "NIST"]
+
+# Alert Configuration
+critical_finding_severity = "HIGH"
+auto_remediation_enabled  = false
+
+# Cost Management
+cost_optimization_threshold = 100.00
+
+# Logging and Backup
+log_retention_days    = 30
+backup_retention_days = 90

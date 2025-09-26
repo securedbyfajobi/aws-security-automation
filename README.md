@@ -1,32 +1,56 @@
-# ☁️ AWS Security Automation
+# AWS Security Automation Platform
 
-[![AWS](https://img.shields.io/badge/AWS-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)](https://aws.amazon.com/)
-[![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org/)
-[![Terraform](https://img.shields.io/badge/Terraform-7B42BC?style=for-the-badge&logo=terraform&logoColor=white)](https://terraform.io/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
+[![Terraform](https://img.shields.io/badge/terraform-1.9+-purple.svg)](https://terraform.io)
+[![AWS](https://img.shields.io/badge/aws-eu--west--2-orange.svg)](https://aws.amazon.com)
+[![Security](https://img.shields.io/badge/security-hardened-green.svg)](docs/security/)
+[![Security](https://img.shields.io/badge/security-monitoring-red.svg)](monitoring/)
 
-> **Enterprise-grade AWS security automation scripts and templates for production environments**
+> **Enterprise-grade AWS security orchestration, automation, and response (SOAR) platform**
 
-*Developed and battle-tested in production environments with 99.9% uptime track record*
+*Production-ready security automation with advanced threat detection and intelligent response capabilities*
 
-## 🛡️ Overview
+## Overview
 
-This repository contains automated security solutions for AWS environments, focusing on proactive threat detection, compliance monitoring, and incident response automation. All scripts have been used in production environments to secure enterprise cloud infrastructures.
+The AWS Security Automation Platform is a comprehensive security orchestration, automation, and response (SOAR) solution designed to enhance AWS security posture through intelligent automation, advanced threat detection, and coordinated incident response.
 
-## 📁 Repository Structure
+### Key Capabilities
+
+- **Advanced Threat Detection**: Statistical anomaly detection and correlation
+- **Automated Remediation**: Intelligent response to security findings
+- **Comprehensive Monitoring**: Real-time dashboards and alerting
+- **Disaster Recovery**: Automated backups and recovery procedures
+- **Security Hardening**: Ansible-based server hardening and configuration management
+- **Container Security**: Multi-tool vulnerability scanning and compliance
+- **Multi-Cloud Ready**: Extensible architecture for cloud security
+
+## Repository Structure
 
 ```
-├── guardduty-automation/          # GuardDuty findings automation
+├── guardduty-automation/          # GuardDuty findings automation & correlation
 ├── security-hub-findings/         # Security Hub centralized management
-├── compliance-scanner/            # Automated compliance checking
+├── compliance-scanner/            # CIS/NIST/PCI automated compliance checking
 ├── cost-optimization/             # Security-focused cost optimization
 ├── incident-response/             # Automated incident response workflows
 ├── iam-analyzer/                  # IAM permissions and policy analysis
-└── cloudtrail-monitoring/         # CloudTrail log analysis and alerting
+├── cloudtrail-monitoring/         # CloudTrail log analysis and alerting
+├── terraform/                     # Infrastructure as Code (IaC)
+├── ansible/                       # Server hardening & configuration management
+├── monitoring/                    # Prometheus, Grafana & advanced alerting
+├── security-scanning/             # Multi-tool vulnerability management
+├── disaster-recovery/             # Backup & disaster recovery automation
+├── grafana/                       # Security dashboards & analytics
+├── prometheus/                    # Metrics collection & alerting rules
+├── docker/                        # Container definitions & security
+├── tests/                         # Comprehensive test suites
+├── docs/                          # Documentation & runbooks
+└── scripts/                       # Deployment & operational scripts
 ```
 
-## 🚀 Key Features
+## Key Features
 
-### 🔍 **GuardDuty Automation**
+### GuardDuty Automation
 - Automated threat detection and response
 - Custom finding severity categorization
 - Integration with Slack/Teams for real-time alerts
